@@ -414,7 +414,7 @@ if __name__ == '__main__':
         for covar in covarDict[ind]:
             if covar == "PCA":
                 for PC in covarDict[ind][covar]["GCTA"]:
-                    PCName = f"{PC}"
+                    PCName = f"GCTA_{PC}"
                     if PCName not in covarAll:
                         covarAll.append(PCName)
             else:
