@@ -10,7 +10,7 @@ import numpy as np
 
 
 def execute(command, logFile=""):
-    #os.system(command)
+    os.system(command)
     print(command)
 
 
@@ -138,7 +138,7 @@ def getProjectedPCA(target, reference, gcta, X, threads, name, folder, plink1, l
         command = f"{command} --autosome"
     execute(command, logFile)
     if target == "":
-        return f"{folder}/{name}_PCs"
+        return f"{folder}/{name}_PCs.eigenvec"
 
 
     command = f"{gcta} --bfile {target} --maf 0.01 --project-loading {folder}/{name}_VariantLoading 50 --out {folder}/{name}_TargetPC --thread-num {threads}"
@@ -148,7 +148,7 @@ def getProjectedPCA(target, reference, gcta, X, threads, name, folder, plink1, l
         command = f"{command} --autosome"
     execute(command, logFile)
 
-    return f"{folder}/{name}_TargetPC"
+    return f"{folder}/{name}_TargetPC.proj.eigenvec"
 
 
 #======================================================================== Covar =========================================================================
@@ -284,7 +284,7 @@ def addPCAToCovarDict(filePCA, covarDict, dataSource):
             covarDict[ind]["PCA"][dataSource] = {}
 
 
-    file = open(f"{filePCA}.proj.eigenvec")
+    file = open(f"{filePCA}")
 
     #Project PCA has no header, while the previous PCA had
     PCList = []
