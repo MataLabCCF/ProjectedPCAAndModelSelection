@@ -45,6 +45,9 @@ def removeLDAndMAFToPCA(merged, target, ref, folder, name, plink1, logFile):
     execute(command, logFile)
 
     targetLD = extractVariants(target, f"{folder}/{name}.prune.in", f"{name}_Target", folder, plink1, logFile)
+    if ref == "":
+        return targetLD, ""
+
     refLD = extractVariants(ref, f"{folder}/{name}.prune.in", f"{name}_Ref", folder, plink1, logFile)
 
     return targetLD, refLD
@@ -134,6 +137,9 @@ def getProjectedPCA(target, reference, gcta, X, threads, name, folder, plink1, l
     else:
         command = f"{command} --autosome"
     execute(command, logFile)
+    if target == "":
+        return f"{folder}/{name}_PCs"
+
 
     command = f"{gcta} --bfile {target} --maf 0.01 --project-loading {folder}/{name}_VariantLoading 50 --out {folder}/{name}_TargetPC --thread-num {threads}"
     if X:
@@ -358,7 +364,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PCA and regression')
 
     data = parser.add_argument_group("Data arguments")
-    data.add_argument('-A', '--autosomal', help='Genotyped file name for autosomal chromosome', required=False)
+    data.add_argument('-A', '--autosomal', help='Genotyped file name for autosomal chromosome', required=True)
     data.add_argument('-t', '--tableCovar', help='File with covariatives to be added to the model', required=True)
     data.add_argument('--threads', help='Number of processors to be used (default = 1)',
                       required=False, default = 1)
@@ -389,13 +395,26 @@ if __name__ == '__main__':
     
     if os.path.isfile(f"{args.autosomal}.pgen"):
         args.autosomal = convertPfileToBfile(args.autosomal, "Target", args.folder, args.plink2, logFile)
-    if os.path.isfile(f"{args.AutosomalRef}.pgen"):
-        args.AutosomalRef = convertPfileToBfile(args.AutosomalRef, "Ref", args.folder, args.plink2, logFile)
-    
-    
-    bfileMerged, targetCommon, refCommon = mergeRefAndTarget(args.autosomal, args.AutosomalRef, args.folder, f"{args.name}_AutosomalPCA", args.plink1, logFile)
-    targetLD, refLD = removeLDAndMAFToPCA(bfileMerged, targetCommon, refCommon, args.folder, f"{args.name}_LD", args.plink1, logFile)
-    autosomalPCA = getProjectedPCA(targetCommon, refCommon, args.gcta, False, args.threads, "AutosomalPCA", args.folder, args.plink1, logFile)
+
+
+    if args.AutosomalRef != "":
+        # Projected PCA
+        if os.path.isfile(f"{args.AutosomalRef}.pgen"):
+            args.AutosomalRef = convertPfileToBfile(args.AutosomalRef, "Ref", args.folder, args.plink2, logFile)
+
+
+        bfileMerged, targetCommon, refCommon = mergeRefAndTarget(args.autosomal, args.AutosomalRef, args.folder, f"{args.name}_AutosomalPCA", args.plink1, logFile)
+        targetLD, refLD = removeLDAndMAFToPCA(bfileMerged, targetCommon, refCommon, args.folder, f"{args.name}_LD", args.plink1, logFile)
+        autosomalPCA = getProjectedPCA(targetLD, refLD, args.gcta, False, args.threads, "AutosomalPCA", args.folder, args.plink1, logFile)
+    else:
+        #PCA without referece
+        #Send ref as empty to cancel the LD removal for ref
+        targetLD, refLD = removeLDAndMAFToPCA(args.autosomal , args.autosomal, "", args.folder, f"{args.name}_LD",args.plink1, logFile)
+
+        #Send target as empty to perform PCA only on target (that will be the ref on the function)
+        autosomalPCA = getProjectedPCA("", targetLD, args.gcta, False, args.threads, "AutosomalPCA",
+                                       args.folder, args.plink1, logFile)
+
     covarDict, PCList = addPCAToCovarDict(autosomalPCA, covarDict, "GCTA")
     
     PCASource = ["GCTA"]
