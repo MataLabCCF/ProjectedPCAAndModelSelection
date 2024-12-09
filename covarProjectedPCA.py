@@ -17,7 +17,7 @@ def execute(command, logFile=""):
 
 def convertPfileToBfile(pfile, name, folder, plink2, logFile):
     outputPrefix = f"{folder}/{name}"
-    commandLine = f"{plink2} --pfile {pfile} --make-bed --out {outputPrefix} --double-id --keep-allele-order"
+    commandLine = f"{plink2} --pfile {pfile} --make-bed --out {outputPrefix} --double-id --keep-allele-order --chr 1-22"
 
     execute(commandLine)
 
@@ -283,14 +283,16 @@ def addPCAToCovarDict(filePCA, covarDict, dataSource):
         if dataSource not in covarDict[ind]["PCA"]:
             covarDict[ind]["PCA"][dataSource] = {}
 
-
+    print(f"Open {filePCA} to add to covar")
     file = open(f"{filePCA}")
 
     #Project PCA has no header, while the previous PCA had
     PCList = []
 
     for line in file:
-        data = line.strip().split("\t")
+        #The projection is tab separated, the single PCA is space
+        data = line.strip().split()
+        print(line)
         ind = data[1]
         if ind in covarDict:
             for i in range(2, len(data)):
