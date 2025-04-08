@@ -116,12 +116,15 @@ def mergeRefAndTarget(bfileTarget, bfileRef, folder, name, plink1, logFile):
     return mergeCommonFiles(targetCommon, refCommon, "Merged", f"{folder}/{name}_MergeRefAlt/", plink1, logFile), targetCommon, refCommon
 
 
-def getProjectedPCA(target, reference, gcta, X, threads, name, folder, plink1, logFile):
+def getProjectedPCA(target, reference, gcta, X, threads, name, folder, plink1, removeList, logFile):
     command = f"{gcta} --bfile {reference} --maf 0.01 --make-grm --out {folder}/{name} --thread-num {threads}"
     if X:
         command = f"{command} --chr 23 --autosome-num 25"
     else:
         command = f"{command} --autosome"
+
+    if removeList != "":
+        command = f"{command} --remove {removeList}"
     execute(command, logFile)
 
     command = f"{gcta} --grm {folder}/{name} --maf 0.01 --pca 50 --out {folder}/{name}_PCs --thread-num {threads}"
@@ -129,6 +132,7 @@ def getProjectedPCA(target, reference, gcta, X, threads, name, folder, plink1, l
         command = f"{command} --chr 23 --autosome-num 25"
     else:
         command = f"{command} --autosome"
+
     execute(command, logFile)
 
     command = f"{gcta} --bfile {reference} --maf 0.01 --pc-loading {folder}/{name}_PCs --out {folder}/{name}_VariantLoading --thread-num {threads}"
@@ -146,6 +150,9 @@ def getProjectedPCA(target, reference, gcta, X, threads, name, folder, plink1, l
         command = f"{command} --chr 23 --autosome-num 25"
     else:
         command = f"{command} --autosome"
+
+    if removeList != "":
+        command = f"{command} --remove {removeList}"
     execute(command, logFile)
 
     return f"{folder}/{name}_TargetPC.proj.eigenvec"
@@ -157,25 +164,16 @@ def modelSelection(covar, modelSelection, folder, name, logFile):
 
     execute(commandLine)
 
-    print(f"Opening the file {folder}/{name}_variables.tsv")
-    fileModel = open(f"{folder}/{name}_variables.tsv")
-    model = []
-    for line in fileModel:
-        model.append(line.strip())
+    print(f"Model variables file {folder}/{name}_variables.tsv")
 
-    print(f"Return the model: {model}")
-    return model
+def buildCovarFile(covarDict, remove, PCList, PCASource, bfile, folder, name):
+    removeList = []
 
-
-
-def buildCovarFile(covarDict, outlier, PCList, PCASource, bfile, folder, name):
-    outlierList = []
-
-    #outlierFile = open(outlier)
-    #for line in outlierFile:
-    #    IID, FID = line.strip().split()
-    #    outlierList.append(IID)
-    #outlierFile.close()
+    removeFile = open(remove)
+    for line in removeFile:
+        FID, IID = line.strip().split()
+        removeList.append(IID)
+    removeFile.close()
 
     covarList = []
     famFile = open(f"{bfile}.fam")
@@ -196,7 +194,7 @@ def buildCovarFile(covarDict, outlier, PCList, PCASource, bfile, folder, name):
 
     for line in famFile:
         FID, IID, mother, father, sex, pheno = line.strip().split()
-        if IID not in outlierList and IID in covarDict:
+        if IID not in removeList and IID in covarDict:
             covarFile.write(f"{IID}")
             for covar in covarList:
                 covarFile.write(f"\t{covarDict[IID][covar]}")
@@ -207,73 +205,6 @@ def buildCovarFile(covarDict, outlier, PCList, PCASource, bfile, folder, name):
     covarFile.close()
     famFile.close()
     return f"{folder}/{name}.tsv"
-
-
-def createOutlierList(covarDict, bfile, PCASource, PCList, folder, name, missing, model):
-    print(f"{bfile}.fam")
-    #print(f"{covarDict}")
-    famFile = open(f"{bfile}.fam")
-    sampleList = []
-
-    for line in famFile:
-        FID, IID, mother, father, sex, pheno = line.strip().split()
-        sampleList.append(IID)
-
-    removalDict = {}
-
-    for dataSource in PCASource:
-        
-        #Get all PCs that are in the model
-        for PC in PCList:
-            if PC in model:
-                listPC = []
-                
-                #Get all the samples that are on covarList
-                for ind in sampleList:
-                    if ind in covarDict:
-                        PCInfo = float(covarDict[ind]["PCA"][dataSource][PC])
-                        listPC.append(PCInfo)
-    
-                mean = np.mean(listPC)
-                sd = np.std(listPC)
-    
-                lowerBound = mean - 3 * sd
-                upperBound = mean + 3 * sd
-    
-    
-                for ind in sampleList:
-                    if ind in covarDict:
-                        PCInfo = float(covarDict[ind]["PCA"][dataSource][PC])
-                        if PCInfo < lowerBound or PCInfo > upperBound:
-                            if ind not in removalDict:
-                                removalDict[ind] = []
-                                
-                            print(f"{ind} outlier {PC}")
-                            removalDict[ind].append(f"{PC}({dataSource})")
-
-    fileToRemove = open(f"{folder}/{name}_outlierList.txt", "w")
-    fileToRemoveExplanation = open(f"{folder}/{name}_outlierExplanation.txt", "w")
-
-
-
-    for ind in missing:
-        fileToRemove.write(f"{ind}\t{ind}\n")
-        fileToRemoveExplanation.write(f"{ind}: missing data\n")
-    
-    for ind in removalDict:
-        fileToRemove.write(f"{ind}\t{ind}\n")
-        fileToRemoveExplanation.write(f"{ind}:")
-        for info in removalDict[ind]:
-            fileToRemoveExplanation.write(f" {info}")
-        fileToRemoveExplanation.write(f"\n")
-        missing.append(ind)
-    
-    fileToRemove.close()
-    fileToRemoveExplanation.close()
-
-    return f"{folder}/{name}_outlierList.txt", missing
-
-
 
 def addPCAToCovarDict(filePCA, covarDict, dataSource):
     for ind in covarDict:
@@ -368,6 +299,7 @@ if __name__ == '__main__':
     data = parser.add_argument_group("Data arguments")
     data.add_argument('-A', '--autosomal', help='Genotyped file name for autosomal chromosome', required=True)
     data.add_argument('-t', '--tableCovar', help='File with covariatives to be added to the model', required=True)
+    data.add_argument('-r', '--remove', help='List of samples to be removed', required=False, default = "")
     data.add_argument('--threads', help='Number of processors to be used (default = 1)',
                       required=False, default = 1)
 
@@ -407,7 +339,8 @@ if __name__ == '__main__':
 
         bfileMerged, targetCommon, refCommon = mergeRefAndTarget(args.autosomal, args.AutosomalRef, args.folder, f"{args.name}_AutosomalPCA", args.plink1, logFile)
         targetLD, refLD = removeLDAndMAFToPCA(bfileMerged, targetCommon, refCommon, args.folder, f"{args.name}_LD", args.plink1, logFile)
-        autosomalPCA = getProjectedPCA(targetLD, refLD, args.gcta, False, args.threads, "AutosomalPCA", args.folder, args.plink1, logFile)
+        autosomalPCA = getProjectedPCA(targetLD, refLD, args.gcta, False, args.threads, "AutosomalPCA",
+                                       args.folder, args.plink1, args.remove, logFile)
     else:
         #PCA without referece
         #Send ref as empty to cancel the LD removal for ref
@@ -415,68 +348,11 @@ if __name__ == '__main__':
 
         #Send target as empty to perform PCA only on target (that will be the ref on the function)
         autosomalPCA = getProjectedPCA("", targetLD, args.gcta, False, args.threads, "AutosomalPCA",
-                                       args.folder, args.plink1, logFile)
+                                       args.folder, args.plink1, args.remove, logFile)
 
     covarDict, PCList = addPCAToCovarDict(autosomalPCA, covarDict, "GCTA")
     
     PCASource = ["GCTA"]
     outlierList = []
-    
-    covar = buildCovarFile(covarDict, outlierList, PCList, PCASource, args.autosomal, args.folder, f"{args.name}")
-    model = modelSelection(covar, args.selectModel, args.folder, f"{args.name}", logFile)
-    outlierListFile, outlierList = createOutlierList(covarDict, args.autosomal, PCASource, PCList, args.folder, f"{args.name}", missing, model)
-
-    covarAll = []
-    covarOrder = []
-    
-    print(covarDict)
-    
-    for ind in covarDict:
-        for covar in covarDict[ind]:
-            if covar == "PCA":
-                for PC in covarDict[ind][covar]["GCTA"]:
-                    PCName = f"GCTA_{PC}"
-                    if PCName not in covarAll:
-                        covarAll.append(PCName)
-            else:
-                if covar not in covarAll:
-                    covarAll.append(covar)
-    print(f"All covar: {covarAll}")
-
-    
-
-    fileFinal = open("CovarPCAProjected.tsv", "w")
-    covarOrder.append("DISEASE")
-    fileFinal.write(f"IID\tDISEASE")
-
-    for covar in covarAll:
-        if covar in model:
-            fileFinal.write(f"\t{covar}")
-            print(f"The covar {covar} is on the model")
-            covarOrder.append(covar)
-        else:
-            for modelCovar in model:
-                if covar in modelCovar and "PC" not in covar:
-                    fileFinal.write(f"\t{covar}")
-                    print(f"The covar {covar} is on the model ({modelCovar})")
-                    covarOrder.append(covar)
-                    break
-  
-    fileFinal.write(f"\n")
-    for ind in covarDict: 
-        print(f"Addind {ind} -> ", end = "")
-        if ind not in outlierList:
-            print(f"Addind")
-            if "PC1" in covarDict[ind]['PCA']['GCTA']:
-                fileFinal.write(f"{ind}")
-                for covar in covarOrder:
-                    print(f"{covar}")    
-                    if "PC" in covar:
-                        PC = covar.split("_")[-1]
-                        fileFinal.write(f"\t{covarDict[ind]['PCA']['GCTA'][PC]}")
-                    else:
-                        fileFinal.write(f"\t{covarDict[ind][covar]}")
-                fileFinal.write(f"\n")
-        else:
-            print(f"Not in")
-    fileFinal.close()
+    covar = buildCovarFile(covarDict, args.remove, PCList, PCASource, args.autosomal, args.folder, f"{args.name}")
+    modelSelection(covar, args.selectModel, args.folder, f"{args.name}", logFile)
