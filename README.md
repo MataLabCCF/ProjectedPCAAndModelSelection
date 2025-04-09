@@ -1,7 +1,5 @@
 # Projected PCA and Model Selection
 
-![alt text](PCA.png)
-
 ## covarProjectedPCA.py
 
 This script performs all steps to conduct a projected or non-projected PCA using GCTA. 
@@ -73,4 +71,6 @@ This work is supported by NIH Grant R01 1R01NS112499-01A1, MJFF Grant ID: 18298,
 # Contact
 Created by Thiago Peixoto Leal. PhD ([PEIXOTT@ccf.org](PEIXOTT@ccf.org) or [thpeixotol@hotmail.com](thpeixotol@hotmail.com))
 
-# Need to create the fluxogram
+
+
+![alt text](PCA.png)
