@@ -168,12 +168,12 @@ def modelSelection(covar, modelSelection, folder, name, logFile):
 
 def buildCovarFile(covarDict, remove, PCList, PCASource, bfile, folder, name):
     removeList = []
-
-    removeFile = open(remove)
-    for line in removeFile:
-        FID, IID = line.strip().split()
-        removeList.append(IID)
-    removeFile.close()
+    if remove != "":
+        removeFile = open(remove)
+        for line in removeFile:
+            FID, IID = line.strip().split()
+            removeList.append(IID)
+        removeFile.close()
 
     covarList = []
     famFile = open(f"{bfile}.fam")
